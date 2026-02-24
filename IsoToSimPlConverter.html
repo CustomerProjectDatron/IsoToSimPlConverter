@@ -1,0 +1,885 @@
+﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISO to SimPL Converter</title>
+    <style>
+        :root {
+            --bg: #1e1e1e;
+            --bg-panel: #252526;
+            --bg-header: #2d2d2d;
+            --border: #404040;
+            --text: #d4d4d4;
+            --text-dim: #808080;
+            --accent: #0078d4;
+            --accent-hover: #1a8adb;
+            --line-num: #858585;
+            --drop-border: #0078d4;
+            --added: rgba(0, 120, 0, 0.15);
+            --removed: rgba(120, 0, 0, 0.15);
+            --btn-success: #16825d;
+            --btn-success-hover: #1a9e6f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Consolas, 'Courier New', monospace;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: var(--bg-header);
+            border-bottom: 1px solid var(--border);
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .toolbar h1 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            margin-right: auto;
+        }
+
+        .toolbar button {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: 'Segoe UI', sans-serif;
+            transition: background 0.15s;
+        }
+
+        .btn-download {
+            background: var(--btn-success);
+            color: white;
+            display: none;
+        }
+
+        .btn-download:hover {
+            background: var(--btn-success-hover);
+        }
+
+        .btn-download.visible {
+            display: inline-block;
+        }
+
+        .btn-clear {
+            background: #c33;
+            color: white;
+            display: none;
+        }
+
+        .btn-clear:hover {
+            background: #d44;
+        }
+
+        .btn-clear.visible {
+            display: inline-block;
+        }
+
+        .btn-copy {
+            background: var(--accent);
+            color: white;
+            display: none;
+        }
+
+        .btn-copy:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-copy.visible {
+            display: inline-block;
+        }
+
+        .btn-copy.copied {
+            background: var(--btn-success);
+        }
+
+        .file-name {
+            font-size: 12px;
+            color: var(--text-dim);
+            display: none;
+        }
+
+        .file-name.visible {
+            display: inline-block;
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            margin: 40px;
+            transition: border-color 0.2s, background 0.2s;
+            cursor: pointer;
+        }
+
+        .drop-zone.drag-over {
+            border-color: var(--drop-border);
+            background: rgba(0, 120, 212, 0.08);
+        }
+
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .drop-zone-text {
+            font-size: 16px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        .drop-zone-hint {
+            font-size: 12px;
+            color: var(--text-dim);
+            opacity: 0.6;
+        }
+
+        .drop-zone input[type="file"] {
+            display: none;
+        }
+
+        /* Editor Container */
+        .editor-container {
+            flex: 1;
+            display: none;
+            flex-direction: row;
+            overflow: hidden;
+        }
+
+        .editor-container.visible {
+            display: flex;
+        }
+
+        /* Editor Panel */
+        .editor-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .editor-panel:first-child {
+            border-right: 1px solid var(--border);
+        }
+
+        .panel-header {
+            padding: 6px 12px;
+            background: var(--bg-header);
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-dim);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-header .badge {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-weight: normal;
+        }
+
+        .badge-original {
+            background: rgba(0, 120, 212, 0.2);
+            color: #4fc1ff;
+        }
+
+        .badge-converted {
+            background: rgba(22, 130, 93, 0.2);
+            color: #4ec9b0;
+        }
+
+        .editor-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: auto;
+            background: var(--bg-panel);
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 20px;
+        }
+
+        .editor-content::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        .editor-content::-webkit-scrollbar-track {
+            background: var(--bg-panel);
+        }
+
+        .editor-content::-webkit-scrollbar-thumb {
+            background: #424242;
+            border-radius: 5px;
+        }
+
+        .editor-content::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Code Lines */
+        .code-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .code-line {
+            display: flex;
+            min-height: 20px;
+            white-space: pre;
+        }
+
+        .line-number {
+            width: 55px;
+            min-width: 55px;
+            padding: 0 8px 0 0;
+            text-align: right;
+            color: var(--line-num);
+            user-select: none;
+            flex-shrink: 0;
+            font-size: 11px;
+        }
+
+        .line-content {
+            padding: 0 8px;
+            white-space: pre;
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Only allow text selection on converted (right) panel */
+        #originalEditor {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #convertedEditor .line-content {
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* Syntax Highlighting */
+        .kw-command { color: #569cd6; }
+        .kw-param { color: #9cdcfe; }
+        .kw-value { color: #b5cea8; }
+        .kw-comment { color: #6a9955; font-style: italic; }
+        .kw-tool { color: #c586c0; }
+        .kw-mcode { color: #dcdcaa; }
+        .kw-direction { color: #ce9178; font-weight: bold; }
+
+        /* Resize Handle */
+        .resize-handle {
+            width: 4px;
+            cursor: col-resize;
+            background: var(--border);
+            flex-shrink: 0;
+            transition: background 0.15s;
+        }
+
+        .resize-handle:hover {
+            background: var(--accent);
+        }
+
+        /* Hide default drop zone when file loaded */
+        .drop-zone.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <h1>ISO ➜ SimPL Converter</h1>
+    <span class="file-name" id="fileName"></span>
+    <button class="btn-clear" id="btnClear" onclick="clearFile()">✕ Clear</button>
+    <button class="btn-copy" id="btnCopy" onclick="copyToClipboard()">📋 Copy SimPL</button>
+    <button class="btn-download" id="btnDownload" onclick="downloadConverted()">⬇ Download SimPL</button>
+</div>
+
+<div class="drop-zone" id="dropZone">
+    <div class="drop-zone-icon">📂</div>
+    <div class="drop-zone-text">Drag &amp; Drop a .cnc / .nc / .gcode file here</div>
+    <div class="drop-zone-hint">or click to select file</div>
+    <input type="file" id="fileInput" accept=".cnc,.nc,.gcode,.txt,.iso,.ngc,.tap">
+</div>
+
+<div class="editor-container" id="editorContainer">
+    <div class="editor-panel">
+        <div class="panel-header">
+            <span class="badge badge-original">ISO</span>
+            Original G-Code
+        </div>
+        <div class="editor-content" id="originalEditor"></div>
+    </div>
+    <div class="resize-handle" id="resizeHandle"></div>
+    <div class="editor-panel">
+        <div class="panel-header">
+            <span class="badge badge-converted">SimPL</span>
+            Converted Output
+        </div>
+        <div class="editor-content" id="convertedEditor"></div>
+    </div>
+</div>
+
+<script>
+// ==================== PARSER / CONVERTER ====================
+
+function convertIsoToSimPL(isoText) {
+    const lines = isoText.split(/\r?\n/);
+
+    // Collect all unique tool numbers from the input
+    const toolNumbers = new Set();
+    for (const line of lines) {
+        const tMatch = line.match(/\bT(\d+)/);
+        if (tMatch) toolNumbers.add(tMatch[1]);
+    }
+
+    // Build header lines (no ISO source)
+    const headerLines = [];
+    headerLines.push('module IsoConvertedSimPL');
+    headerLines.push('');
+    headerLines.push('@ MeasuringSystem = "Metric" @');
+    headerLines.push('@ Author = "Datron AG" @');
+    for (const tn of [...toolNumbers].sort((a, b) => parseInt(a) - parseInt(b))) {
+        headerLines.push('@ ToolDescription : "Name":"T' + tn + '", "ToolNumber":"' + tn + '" @');
+    }
+    headerLines.push('using Base');
+    headerLines.push('');
+    headerLines.push('export program Main');
+
+    // Build footer lines (no ISO source)
+    const footerLines = ['endprogram', 'end'];
+
+    // lineMappings: array of { isoLine: string|null, simplLines: string[] }
+    const lineMappings = [];
+
+    // Add header as unmapped lines
+    for (const hl of headerLines) {
+        lineMappings.push({ isoLine: null, simplLines: [hl] });
+    }
+
+    // Process each ISO line
+    for (const rawLine of lines) {
+        const trimmed = rawLine.trim();
+
+        if (trimmed === '') {
+            lineMappings.push({ isoLine: rawLine, simplLines: [''] });
+            continue;
+        }
+
+        if (/^\(.*\)$/.test(trimmed)) {
+            lineMappings.push({ isoLine: rawLine, simplLines: ['    # ' + trimmed] });
+            continue;
+        }
+
+        const withoutN = trimmed.replace(/^N\d+\s*/, '');
+        if (withoutN === '') {
+            lineMappings.push({ isoLine: rawLine, simplLines: [''] });
+            continue;
+        }
+
+        const converted = convertLine(withoutN);
+
+        // Handle __FEED__ markers
+        const feedParts = converted.split('__FEED__');
+        let finalLine = converted;
+        let feedComment = null;
+        if (feedParts.length > 1) {
+            const feedAndRest = feedParts[1];
+            const feedMatch = feedAndRest.match(/^(-?\.?\d+\.?\d*)\s*(.*)/);
+            if (feedMatch) {
+                finalLine = (feedParts[0] + feedMatch[2]).trim() + ' # Feed=' + feedMatch[1];
+            }
+        }
+
+        const simplOutputs = [];
+        if (/^(\(|Spindle|Dwell|Speed|WorkOffset)/.test(finalLine) || /Coolant|Plane|CompOff|CompLeft|CompRight/.test(finalLine)) {
+            simplOutputs.push('    # ' + finalLine);
+        } else if (finalLine) {
+            simplOutputs.push('    ' + finalLine);
+        }
+
+        lineMappings.push({ isoLine: rawLine, simplLines: simplOutputs });
+    }
+
+    // Add footer
+    for (const fl of footerLines) {
+        lineMappings.push({ isoLine: null, simplLines: [fl] });
+    }
+
+    return lineMappings;
+}
+
+function convertLine(line) {
+    // Handle inline comments: extract trailing comment
+    let comment = '';
+    const commentMatch = line.match(/(\(.*?\))\s*$/);
+    if (commentMatch) {
+        comment = ' ' + commentMatch[1];
+        line = line.substring(0, commentMatch.index).trim();
+    }
+
+    // Tokenize: split into G/M/T/S/X/Y/Z/I/J/K/F/R words
+    const tokens = tokenize(line);
+
+    if (tokens.length === 0) return comment.trim();
+
+    const parts = [];
+    let i = 0;
+
+    while (i < tokens.length) {
+        const token = tokens[i];
+        const letter = token.letter;
+        const value = token.value;
+
+        if (letter === 'G') {
+            const gNum = parseFloat(value);
+
+            if (gNum === 0) {
+                // G0 → Rapid
+                const params = collectParams(tokens, i + 1);
+                i = params.nextIndex;
+                const paramStr = params.list.map(p => formatParam(p)).join(' ');
+                parts.push('Rapid' + (paramStr ? ' ' + paramStr : ''));
+            } else if (gNum === 1) {
+                // G1 → Line (F parameter extracted separately)
+                const params = collectParams(tokens, i + 1);
+                i = params.nextIndex;
+                const feedParam = params.list.filter(p => p.letter === 'F');
+                const otherParams = params.list.filter(p => p.letter !== 'F');
+                const paramStr = otherParams.map(p => formatParam(p)).join(' ');
+                if (feedParam.length > 0) {
+                    parts.push('__FEED__' + feedParam[0].value);
+                }
+                parts.push('Line' + (paramStr ? ' ' + paramStr : ''));
+            } else if (gNum === 2) {
+                // G2 → Arc CW
+                const params = collectArcParams(tokens, i + 1);
+                i = params.nextIndex;
+                const paramStr = params.list.map(p => formatArcParam(p)).join(' ');
+                parts.push('Arc ' + paramStr + ' CW');
+            } else if (gNum === 3) {
+                // G3 → Arc CCW
+                const params = collectArcParams(tokens, i + 1);
+                i = params.nextIndex;
+                const paramStr = params.list.map(p => formatArcParam(p)).join(' ');
+                parts.push('Arc ' + paramStr + ' CCW');
+            } else if (gNum === 4) {
+                parts.push('Dwell');
+                i++;
+            } else if (gNum === 17) {
+                parts.push('Plane XY');
+                i++;
+            } else if (gNum === 18) {
+                parts.push('Plane XZ');
+                i++;
+            } else if (gNum === 19) {
+                parts.push('Plane YZ');
+                i++;
+            } else if (gNum === 40) {
+                parts.push('CompOff');
+                i++;
+            } else if (gNum === 41) {
+                parts.push('CompLeft');
+                i++;
+            } else if (gNum === 42) {
+                parts.push('CompRight');
+                i++;
+            } else if (gNum === 54 || gNum === 55 || gNum === 56 || gNum === 57 || gNum === 58 || gNum === 59) {
+                parts.push('WorkOffset G' + value);
+                i++;
+            } else {
+                // Unknown G code - pass through
+                parts.push('G' + value);
+                i++;
+            }
+        } else if (letter === 'T') {
+            parts.push('Tool name="T' + value + '"');
+            i++;
+        } else if (letter === 'M') {
+            const mNum = parseFloat(value);
+            if (mNum === 3) {
+                parts.push('SpindleCW');
+            } else if (mNum === 4) {
+                parts.push('SpindleCCW');
+            } else if (mNum === 5) {
+                parts.push('SpindleStop');
+            } else if (mNum === 8) {
+                parts.push('CoolantOn');
+            } else if (mNum === 9) {
+                parts.push('CoolantOff');
+            } else if (mNum === 30) {
+                parts.push('ProgramEnd');
+            } else {
+                parts.push('M' + value);
+            }
+            i++;
+        } else if (letter === 'S') {
+            parts.push('Speed=' + value);
+            i++;
+        } else {
+            // Standalone parameter (shouldn't normally happen at top level)
+            parts.push(letter + '=' + value);
+            i++;
+        }
+    }
+
+    return parts.join(' ') + comment;
+}
+
+function tokenize(line) {
+    const tokens = [];
+    const regex = /([A-Za-z])(-?\.?\d+\.?\d*)/g;
+    let match;
+    while ((match = regex.exec(line)) !== null) {
+        tokens.push({ letter: match[1].toUpperCase(), value: match[2] });
+    }
+    return tokens;
+}
+
+function collectParams(tokens, startIndex) {
+    const paramLetters = new Set(['X', 'Y', 'Z', 'F', 'R', 'I', 'J', 'K']);
+    const list = [];
+    let i = startIndex;
+    while (i < tokens.length) {
+        if (paramLetters.has(tokens[i].letter)) {
+            list.push(tokens[i]);
+            i++;
+        } else {
+            break;
+        }
+    }
+    return { list, nextIndex: i };
+}
+
+function collectArcParams(tokens, startIndex) {
+    const paramLetters = new Set(['X', 'Y', 'Z', 'I', 'J', 'K', 'F', 'R']);
+    const list = [];
+    let i = startIndex;
+    while (i < tokens.length) {
+        if (paramLetters.has(tokens[i].letter)) {
+            list.push(tokens[i]);
+            i++;
+        } else {
+            break;
+        }
+    }
+    return { list, nextIndex: i };
+}
+
+function formatParam(token) {
+    return token.letter + '=' + token.value;
+}
+
+function formatArcParam(token) {
+    if (token.letter === 'I') return 'dX=' + token.value;
+    if (token.letter === 'J') return 'dY=' + token.value;
+    if (token.letter === 'K') return 'dZ=' + token.value;
+    return token.letter + '=' + token.value;
+}
+
+
+// ==================== UI RENDERING ====================
+
+let currentFileName = '';
+let convertedText = '';
+let currentMappings = [];
+
+function renderEditors(mappings) {
+    const origEl = document.getElementById('originalEditor');
+    const convEl = document.getElementById('convertedEditor');
+
+    let origHtml = '';
+    let convHtml = '';
+    let isoLineNum = 0;
+
+    for (const mapping of mappings) {
+        const simplLines = mapping.simplLines;
+        const hasIso = mapping.isoLine !== null;
+
+        if (hasIso) isoLineNum++;
+
+        for (let s = 0; s < simplLines.length; s++) {
+            // ISO side
+            const isoContent = (s === 0 && hasIso) ? escapeHtml(mapping.isoLine) : '';
+            const isoHighlighted = isoContent ? highlightISO(isoContent) : '';
+            const isoLineLabel = (s === 0 && hasIso) ? String(isoLineNum) : '';
+
+            // SimPL side line number
+            let simplLineLabel;
+            if (!hasIso) {
+                simplLineLabel = '';
+            } else if (simplLines.length === 1) {
+                simplLineLabel = String(isoLineNum);
+            } else {
+                simplLineLabel = isoLineNum + '.' + (s + 1);
+            }
+
+            const simplContent = escapeHtml(simplLines[s]);
+            const simplHighlighted = highlightSimPL(simplContent);
+
+            origHtml += `<div class="code-line"><span class="line-number">${isoLineLabel}</span><span class="line-content">${isoHighlighted}</span></div>`;
+            convHtml += `<div class="code-line"><span class="line-number">${simplLineLabel}</span><span class="line-content">${simplHighlighted}</span></div>`;
+        }
+    }
+
+    origEl.innerHTML = origHtml;
+    convEl.innerHTML = convHtml;
+}
+
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function highlightISO(text) {
+    // Comments
+    text = text.replace(/(\(.*?\))/g, '<span class="kw-comment">$1</span>');
+    // G codes
+    text = text.replace(/\b(G\d+)/g, '<span class="kw-command">$1</span>');
+    // M codes
+    text = text.replace(/\b(M\d+)/g, '<span class="kw-mcode">$1</span>');
+    // T codes
+    text = text.replace(/\b(T\d+)/g, '<span class="kw-tool">$1</span>');
+    // S codes
+    text = text.replace(/\b(S\d+)/g, '<span class="kw-param">$1</span>');
+    // N codes
+    text = text.replace(/\b(N\d+)/g, '<span class="kw-value">$1</span>');
+    // Parameters
+    text = text.replace(/\b([XYZIJKFR]-?\.?\d+\.?\d*)/g, '<span class="kw-param">$1</span>');
+    return text;
+}
+
+function highlightSimPL(text) {
+    // Lines containing # comment → highlight the comment part
+    if (/^\s*#\s/.test(text)) {
+        return '<span class="kw-comment">' + text + '</span>';
+    }
+    // SimPL structural keywords
+    text = text.replace(/\b(module|export|program|endprogram|end|using)\b/g, '<span class="kw-command">$1</span>');
+    // Annotations
+    text = text.replace(/(@ .+? @)/g, '<span class="kw-comment">$1</span>');
+    // Comments
+    text = text.replace(/(\(.*?\))/g, '<span class="kw-comment">$1</span>');
+    // Commands
+    text = text.replace(/\b(Line|Arc|Rapid|Dwell|Plane\s+\w+|CompOff|CompLeft|CompRight|WorkOffset\s+G\d+|ProgramEnd)\b/g, '<span class="kw-command">$1</span>');
+    // Tool
+    text = text.replace(/\b(Tool\s+name=&quot;T\d+&quot;)/g, '<span class="kw-tool">$1</span>');
+    // M/Spindle/Coolant
+    text = text.replace(/\b(SpindleCW|SpindleCCW|SpindleStop|CoolantOn|CoolantOff)\b/g, '<span class="kw-mcode">$1</span>');
+    // Speed
+    text = text.replace(/\b(Speed=-?\.?\d+\.?\d*)/g, '<span class="kw-param">$1</span>');
+    // Direction
+    text = text.replace(/\b(CW|CCW)\b/g, '<span class="kw-direction">$1</span>');
+    // Parameters with =
+    text = text.replace(/\b([A-Za-z]+=)(-?\.?\d+\.?\d*)/g, '<span class="kw-param">$1</span><span class="kw-value">$2</span>');
+    return text;
+}
+
+
+// ==================== FILE HANDLING ====================
+
+function handleFile(file) {
+    currentFileName = file.name;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const isoText = e.target.result;
+        currentMappings = convertIsoToSimPL(isoText);
+
+        // Build convertedText from mappings
+        const allSimplLines = [];
+        for (const m of currentMappings) {
+            for (const sl of m.simplLines) {
+                allSimplLines.push(sl);
+            }
+        }
+        convertedText = allSimplLines.join('\n');
+
+        // Show editor, hide drop zone
+        document.getElementById('dropZone').classList.add('hidden');
+        document.getElementById('editorContainer').classList.add('visible');
+        document.getElementById('btnDownload').classList.add('visible');
+        document.getElementById('btnCopy').classList.add('visible');
+        document.getElementById('btnClear').classList.add('visible');
+        document.getElementById('fileName').classList.add('visible');
+        document.getElementById('fileName').textContent = currentFileName;
+
+        renderEditors(currentMappings);
+        setupSyncScroll();
+    };
+    reader.readAsText(file);
+}
+
+function downloadConverted() {
+    const baseName = currentFileName.replace(/\.[^.]+$/, '');
+    const blob = new Blob([convertedText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = baseName + '.simpl';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function clearFile() {
+    document.getElementById('dropZone').classList.remove('hidden');
+    document.getElementById('editorContainer').classList.remove('visible');
+    document.getElementById('btnDownload').classList.remove('visible');
+    document.getElementById('btnCopy').classList.remove('visible');
+    document.getElementById('btnClear').classList.remove('visible');
+    document.getElementById('fileName').classList.remove('visible');
+    document.getElementById('originalEditor').innerHTML = '';
+    document.getElementById('convertedEditor').innerHTML = '';
+    currentFileName = '';
+    convertedText = '';
+    currentMappings = [];
+}
+
+function copyToClipboard() {
+    navigator.clipboard.writeText(convertedText).then(() => {
+        const btn = document.getElementById('btnCopy');
+        btn.textContent = '✓ Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = '📋 Copy SimPL';
+            btn.classList.remove('copied');
+        }, 2000);
+    });
+}
+
+
+// ==================== DRAG & DROP ====================
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+});
+
+// Also allow drop on whole body when editor is shown
+document.body.addEventListener('dragover', (e) => {
+    e.preventDefault();
+});
+
+document.body.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+});
+
+
+// ==================== SYNCHRONIZED SCROLLING ====================
+
+function setupSyncScroll() {
+    const origEl = document.getElementById('originalEditor');
+    const convEl = document.getElementById('convertedEditor');
+
+    let isSyncing = false;
+
+    origEl.addEventListener('scroll', () => {
+        if (isSyncing) return;
+        isSyncing = true;
+        convEl.scrollTop = origEl.scrollTop;
+        convEl.scrollLeft = origEl.scrollLeft;
+        requestAnimationFrame(() => { isSyncing = false; });
+    });
+
+    convEl.addEventListener('scroll', () => {
+        if (isSyncing) return;
+        isSyncing = true;
+        origEl.scrollTop = convEl.scrollTop;
+        origEl.scrollLeft = convEl.scrollLeft;
+        requestAnimationFrame(() => { isSyncing = false; });
+    });
+}
+
+
+// ==================== RESIZE HANDLE ====================
+
+const resizeHandle = document.getElementById('resizeHandle');
+let isResizing = false;
+
+resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const container = document.getElementById('editorContainer');
+    const rect = container.getBoundingClientRect();
+    const panels = container.querySelectorAll('.editor-panel');
+    const totalWidth = rect.width - 4; // minus handle
+    const leftWidth = e.clientX - rect.left;
+    const rightWidth = totalWidth - leftWidth;
+    if (leftWidth > 100 && rightWidth > 100) {
+        panels[0].style.flex = 'none';
+        panels[0].style.width = leftWidth + 'px';
+        panels[1].style.flex = '1';
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    }
+});
+
+</script>
+</body>
+</html>
